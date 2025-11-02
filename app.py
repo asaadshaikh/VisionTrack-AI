@@ -17,6 +17,142 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- CUSTOM CSS ---
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+html, body, [class*="st-"] {
+    font-family: 'Inter', sans-serif;
+}
+
+/* Main app container */
+.stApp {
+    /* Use a subtle gradient or image background */
+    background-color: #0e1117; /* Fallback */
+    background-image: linear-gradient(180deg, #0e1117 0%, #1a1a2e 100%);
+}
+
+/* Sidebar styling */
+[data-testid="stSidebar"] {
+    background-color: rgba(40, 43, 54, 0.4); /* Semi-transparent */
+    backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Sidebar header */
+[data-testid="stSidebar"] .st-emotion-cache-16txtl3 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+/* Sidebar "About" box */
+[data-testid="stSidebar"] .stAlert {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+}
+
+/* Main content area */
+[data-testid="stAppViewContainer"] > .main > .block-container {
+    padding-top: 2rem;
+    padding-left: 2rem;
+    padding-right: 2rem;
+}
+
+/* Title */
+h1 {
+    color: #FFFFFF;
+    font-weight: 700;
+}
+
+/* Sub-header text */
+.stApp > .main p {
+    font-size: 1.1rem;
+    color: #a0a0a0;
+}
+
+/* Tabs */
+[data-testid="stTabs"] button {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #a0a0a0;
+    border-radius: 8px 8px 0 0;
+}
+[data-testid="stTabs"] button[aria-selected="true"] {
+    color: #FFFFFF;
+    background-color: #1E1E2D;
+    border-bottom: 2px solid #00A3FF; /* Highlight color */
+}
+
+/* Expander (for detected objects) */
+[data-testid="stExpander"] {
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+[data-testid="stExpander"] summary {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #FFFFFF;
+}
+
+/* Buttons */
+.stButton button {
+    background-color: #00A3FF;
+    color: #FFFFFF;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    transition: background-color 0.3s ease;
+}
+.stButton button:hover {
+    background-color: #007ACC;
+    color: #FFFFFF;
+}
+.stButton button:focus {
+    box-shadow: 0 0 0 2px rgba(0, 163, 255, 0.5);
+    background-color: #007ACC;
+}
+
+/* File uploader */
+[data-testid="stFileUploader"] {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+}
+[data-testid="stFileUploader"] label {
+    color: #FFFFFF;
+}
+
+/* Info/Warning boxes */
+[data-testid="stAlert"] {
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+[data-testid="stAlert"] .st-emotion-cache-l9i032 {
+    color: #FFFFFF; /* Text color in alert */
+}
+
+/* Success box */
+[data-testid="stAlert"][data-testid*="stSuccess"] {
+    background-color: rgba(0, 255, 100, 0.1);
+    border-color: rgba(0, 255, 100, 0.3);
+}
+
+/* Warning box */
+[data-testid="stAlert"][data-testid*="stWarning"] {
+    background-color: rgba(255, 200, 0, 0.1);
+    border-color: rgba(255, 200, 0, 0.3);
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
 # --- Constants ---
 CONFIDENCE_THRESHOLD_DEFAULT = 0.3
 MODEL_PATH = 'yolov8n.pt'
@@ -47,15 +183,19 @@ confidence_threshold = st.sidebar.slider(
 try:
     colors = sv.ColorPalette.DEFAULT
     box_annotator = sv.BoxAnnotator(color=colors, thickness=2)
-    label_annotator = sv.LabelAnnotator(color=colors, text_color=sv.Color.white(), text_scale=0.5, text_thickness=1)
+    label_annotator = sv.LabelAnnotator(color=colors, text_color="white", text_scale=0.5, text_thickness=1)
 except AttributeError:
-    st.warning("`sv.ColorPalette.DEFAULT` not found. Using basic colors.")
+    st.warning("`sv.ColorPalette.DEFAULT` or `sv.Color.white()` not found. Using basic string colors.")
     try:
         box_annotator = sv.BoxAnnotator(color="white", thickness=2)
         label_annotator = sv.LabelAnnotator(color="white", text_color="red", text_scale=0.5, text_thickness=1)
     except Exception as e:
         st.error(f"Error initializing annotators: {e}. Check supervision installation.")
         st.stop()
+except Exception as e:
+    st.error(f"An unexpected error occurred during annotator setup: {e}")
+    st.stop()
+
 
 # --- Helper Functions ---
 def process_image(image, confidence):
@@ -81,7 +221,6 @@ def process_frame_with_tracking(frame, confidence, tracker):
     results = model.predict(frame, conf=confidence, verbose=False)
     detections = sv.Detections.from_ultralytics(results[0])
 
-    # Format for DeepSORT
     formatted_detections = []
     if len(detections) > 0:
         for i in range(len(detections)):
@@ -94,7 +233,7 @@ def process_frame_with_tracking(frame, confidence, tracker):
     deepsort_detections = []
     for bbox_xyxy, conf, cls_id in formatted_detections:
         x1, y1, x2, y2 = bbox_xyxy
-        w, h = x2 - x1, y2 - y1
+        w, h = x2 - x1, y2 - yB
         if w > 0 and h > 0:
             deepsort_detections.append(([int(x1), int(y1), int(w), int(h)], conf, cls_id))
     
@@ -103,7 +242,7 @@ def process_frame_with_tracking(frame, confidence, tracker):
         try:
             tracks = tracker.update_tracks(deepsort_detections, frame=frame)
         except Exception:
-            pass # Ignore tracker errors
+            pass 
 
     tracked_bboxes_xyxy = []
     track_ids = []
@@ -123,7 +262,6 @@ def process_frame_with_tracking(frame, confidence, tracker):
     if tracked_bboxes_xyxy:
         tracked_detections = sv.Detections(xyxy=np.array(tracked_bboxes_xyxy))
 
-    # Annotate frame
     annotated_frame = frame.copy()
     if len(tracked_detections) > 0:
         labels = [
@@ -172,7 +310,7 @@ st.write(
 )
 st.divider()
 
-tab1, tab2, tab3 = st.tabs(["🖼️ **Image**", "🎬 **Video**", "LIVE **Webcam**"])
+tab1, tab2, tab3 = st.tabs(["🖼️ Image", "🎬 Video", "LIVE Webcam"])
 
 # --- Image Tab ---
 with tab1:
@@ -290,13 +428,33 @@ with tab3:
 
 # --- Sidebar About ---
 st.sidebar.markdown("---")
-st.sidebar.info(
-    "**About this Project**\n\n"
-    "This app demonstrates a complete AI/ML pipeline:\n"
-    "1. **Detection:** YOLOv8\n"
-    "2. **Tracking:** DeepSORT\n"
-    "3. **Interface:** Streamlit\n\n"
-    "Built as a portfolio project to showcase end-to-end engineering skills."
-)
-# Make sure to replace with your actual GitHub URL
-st.sidebar.link_button("View on GitHub", "https://github.com/asaadshaikh/YOLOv8-Streamlit-Tracker")
+with st.sidebar.container():
+    st.markdown("<h5>About this Project</h5>", unsafe_allow_html=True)
+    st.markdown(
+        "This app demonstrates a complete AI/ML pipeline:\n"
+        "1. **Detection:** YOLOv8\n"
+        "2. **Tracking:** DeepSORT\n"
+        "3. **Interface:** Streamlit\n\n"
+        "Built to showcase end-to-end engineering skills."
+    )
+    st.sidebar.link_button("View on GitHub", "https://github.com/asaadshaikh/YOLOv8-Streamlit-Tracker")
+```
+
+### How to Deploy the New UI:
+
+You know the drill. This is the last push to make it look great.
+
+1.  **Save** the `app.py` file in VS Code.
+2.  Go to your **terminal**.
+3.  **Add** the change:
+    ```bash
+    git add app.py
+    ```
+4.  **Commit** the change (use a clear message):
+    ```bash
+    git commit -m "Feat: Complete UI overhaul with custom CSS"
+    ```
+5.  **Push** the change:
+    ```bash
+    git push origin main
+    
